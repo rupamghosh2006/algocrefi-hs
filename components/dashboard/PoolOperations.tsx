@@ -150,7 +150,7 @@ export default function PoolOperations({ pool }: Props) {
                 fontSize: 13,
                 fontWeight: tab === t ? 500 : 400,
                 cursor: "pointer",
-                transition: "all 0.2s ease",
+                transition: "all 0.3s cubic-bezier(0.16,1,0.3,1)",
                 textTransform: "capitalize",
               }}
             >
