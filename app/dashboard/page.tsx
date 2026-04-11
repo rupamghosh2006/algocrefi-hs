@@ -14,7 +14,7 @@ function DashboardInner() {
   const [activeNav, setActiveNav] = useState("dashboard");
 
   return (
-    <div style={{ minHeight: "100vh", background: "#05050A", position: "relative" }}>
+    <div style={{ minHeight: "100vh", background: "#05050A", position: "relative", display: "flex", flexDirection: "column" }}>
       {/* Noise texture overlay */}
       <div
         aria-hidden
