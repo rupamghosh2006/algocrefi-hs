@@ -1,14 +1,24 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { ToastProvider } from "@/components/dashboard/toastContext";
 import ToastContainer from "@/components/dashboard/ToastContainer";
 import Sidebar from "@/components/dashboard/Sidebar";
 import TopBar from "@/components/dashboard/TopBar";
 import StatCards from "@/components/dashboard/StatCards";
-import PoolChart from "@/components/dashboard/PoolChart";
 import PoolOperations from "@/components/dashboard/PoolOperations";
 import CreditStatus from "@/components/dashboard/CreditStatus";
 import { MOCK_POOL, MOCK_USER, MOCK_LOAN } from "@/lib/mockData";
+
+// Dynamic import for PoolChart (uses canvas, needs ssr: false)
+const PoolChart = dynamic(() => import("@/components/dashboard/PoolChart"), {
+  ssr: false,
+  loading: () => (
+    <div style={{ background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 16, height: 460, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(255,255,255,0.3)", fontFamily: "monospace", fontSize: 12 }}>
+      Loading chart...
+    </div>
+  ),
+});
 
 function DashboardInner() {
   const [activeNav, setActiveNav] = useState("dashboard");
