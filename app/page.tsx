@@ -1,3 +1,6 @@
+"use client";
+import { useState } from "react";
+import ParticleCanvas from "@/components/ParticleCanvas";
 import Loader from "@/components/Loader";
 import Cursor from "@/components/Cursor";
 import Navbar from "@/components/Navbar";
@@ -9,18 +12,29 @@ import StatsTicker from "@/components/StatsTicker";
 import Footer from "@/components/Footer";
 
 export default function Home() {
+  const [loaded, setLoaded] = useState(false);
+
   return (
     <>
-      {/* Page loader — animates out after 1.2s */}
-      <Loader />
+      {/* Fixed particle constellation canvas — sits behind everything */}
+      <ParticleCanvas />
+
+      {/* Full-screen entry loader */}
+      <Loader onDone={() => setLoaded(true)} />
 
       {/* Custom lerp cursor */}
       <Cursor />
 
-      {/* All visible content — fades in after loader exits */}
-      <div id="page-content">
+      {/* Page content — fades in after loader exits */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          opacity: loaded ? 1 : 0,
+          transition: "opacity 0.5s ease",
+        }}
+      >
         <Navbar />
-
         <main>
           <HeroSection />
           <BentoGrid />
@@ -28,7 +42,6 @@ export default function Home() {
           <AuraSection />
           <StatsTicker />
         </main>
-
         <Footer />
       </div>
     </>

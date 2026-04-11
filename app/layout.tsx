@@ -8,8 +8,7 @@ export const metadata: Metadata = {
   keywords: ["Algorand", "DeFi", "lending", "liquidity pool", "ALGO", "AlgoCrefi"],
   openGraph: {
     title: "AlgoCrefi — Permissionless Lending on Algorand",
-    description:
-      "Deposit ALGO to earn yield. Borrow against collateral or your Aura credit score.",
+    description: "Deposit ALGO to earn yield. Borrow against collateral or your Aura credit score.",
     type: "website",
   },
 };
@@ -20,14 +19,10 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="loading">{children}</body>
     </html>
   );
 }

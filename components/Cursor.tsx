@@ -1,59 +1,81 @@
 "use client";
-
 import { useEffect, useRef } from "react";
 
 export default function Cursor() {
   const cursorRef = useRef<HTMLDivElement>(null);
   const pos = useRef({ x: -100, y: -100 });
-  const current = useRef({ x: -100, y: -100 });
-  const rafId = useRef<number | null>(null);
+  const curr = useRef({ x: -100, y: -100 });
+  const rafId = useRef<number>(0);
 
   useEffect(() => {
-    const cursor = cursorRef.current;
-    if (!cursor) return;
+    const el = cursorRef.current;
+    if (!el) return;
 
     const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-    const onMouseMove = (e: MouseEvent) => {
-      pos.current = { x: e.clientX, y: e.clientY };
+    const onMove = (e: MouseEvent) => {
+      pos.current.x = e.clientX;
+      pos.current.y = e.clientY;
     };
 
-    const loop = () => {
-      current.current.x = lerp(current.current.x, pos.current.x, 0.18);
-      current.current.y = lerp(current.current.y, pos.current.y, 0.18);
-      cursor.style.left = `${current.current.x}px`;
-      cursor.style.top = `${current.current.y}px`;
-      rafId.current = requestAnimationFrame(loop);
+    const expand = () => {
+      el.style.width = "28px";
+      el.style.height = "28px";
+      el.style.borderColor = "#7B2FFF";
+    };
+    const shrink = () => {
+      el.style.width = "10px";
+      el.style.height = "10px";
+      el.style.borderColor = "#00FFD1";
     };
 
-    const onMouseEnterInteractive = () => cursor.classList.add("expanded");
-    const onMouseLeaveInteractive = () => cursor.classList.remove("expanded");
+    function tick() {
+      curr.current.x = lerp(curr.current.x, pos.current.x, 0.1);
+      curr.current.y = lerp(curr.current.y, pos.current.y, 0.1);
+      el!.style.transform = `translate(${curr.current.x}px,${curr.current.y}px) translate(-50%,-50%)`;
+      rafId.current = requestAnimationFrame(tick);
+    }
+    tick();
 
-    window.addEventListener("mousemove", onMouseMove);
-    rafId.current = requestAnimationFrame(loop);
-
-    // Attach to all interactive elements
     const attach = () => {
-      document
-        .querySelectorAll("a, button, [data-cursor-expand]")
-        .forEach((el) => {
-          el.addEventListener("mouseenter", onMouseEnterInteractive);
-          el.addEventListener("mouseleave", onMouseLeaveInteractive);
-        });
+      document.querySelectorAll("a,button,[data-cursor]").forEach((node) => {
+        node.removeEventListener("mouseenter", expand);
+        node.removeEventListener("mouseleave", shrink);
+        node.addEventListener("mouseenter", expand);
+        node.addEventListener("mouseleave", shrink);
+      });
     };
-
     attach();
 
-    // Re-attach on DOM changes
     const observer = new MutationObserver(attach);
     observer.observe(document.body, { childList: true, subtree: true });
+    window.addEventListener("mousemove", onMove);
 
     return () => {
-      window.removeEventListener("mousemove", onMouseMove);
-      if (rafId.current) cancelAnimationFrame(rafId.current);
+      cancelAnimationFrame(rafId.current);
+      window.removeEventListener("mousemove", onMove);
       observer.disconnect();
     };
   }, []);
 
-  return <div id="custom-cursor" ref={cursorRef} aria-hidden="true" />;
+  return (
+    <div
+      ref={cursorRef}
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "10px",
+        height: "10px",
+        border: "1.5px solid #00FFD1",
+        borderRadius: "50%",
+        pointerEvents: "none",
+        zIndex: 99999,
+        mixBlendMode: "difference",
+        transition: "width 0.15s ease, height 0.15s ease, border-color 0.15s ease",
+        willChange: "transform",
+      }}
+    />
+  );
 }

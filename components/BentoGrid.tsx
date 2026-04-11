@@ -1,504 +1,255 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 
-import { useEffect, useRef } from "react";
-
-const cardBase: React.CSSProperties = {
-  background: "rgba(255,255,255,0.03)",
+const SECTION_BG = "rgba(5,5,10,0.92)";
+const CARD: React.CSSProperties = {
+  background: "rgba(255,255,255,0.025)",
   border: "1px solid rgba(255,255,255,0.07)",
-  borderRadius: "20px",
-  padding: "32px",
+  borderRadius: 18,
+  padding: 28,
   position: "relative",
   overflow: "hidden",
-  transition: "border-color 0.3s ease, background 0.3s ease",
+  transition: "border-color 0.3s ease, box-shadow 0.3s ease, background 0.3s ease",
 };
 
-function BentoCard({
-  children,
-  style,
-  className,
-  id,
-}: {
-  children: React.ReactNode;
-  style?: React.CSSProperties;
-  className?: string;
-  id?: string;
-}) {
+function useReveal(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } }, { threshold });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, visible };
+}
+
+function CardHover({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  const [hov, setHov] = useState(false);
   return (
     <div
-      id={id}
-      className={`reveal bento-card ${className ?? ""}`}
-      style={{ ...cardBase, ...style }}
-      onMouseEnter={(e) => {
-        const el = e.currentTarget;
-        el.style.borderColor = "rgba(0,255,209,0.2)";
-        el.style.background = "rgba(0,255,209,0.02)";
+      className="bento-card"
+      style={{
+        ...CARD,
+        ...style,
+        borderColor: hov ? "rgba(0,255,209,0.25)" : "rgba(255,255,255,0.07)",
+        boxShadow: hov ? "0 0 40px rgba(0,255,209,0.04), inset 0 0 60px rgba(0,255,209,0.015)" : "none",
+        background: hov ? "rgba(0,255,209,0.018)" : "rgba(255,255,255,0.025)",
       }}
-      onMouseLeave={(e) => {
-        const el = e.currentTarget;
-        el.style.borderColor = "rgba(255,255,255,0.07)";
-        el.style.background = "rgba(255,255,255,0.03)";
-      }}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
     >
       {children}
     </div>
   );
 }
 
-/* ── Icon components ── */
-function HexIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <path
-        d="M16 2L28 9v14L16 30 4 23V9z"
-        stroke="#00FFD1"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <path
-        d="M16 3L5 7v9c0 6 4.5 11.5 11 13 6.5-1.5 11-7 11-13V7z"
-        stroke="#7B2FFF"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function DiamondIcon() {
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-      <path
-        d="M16 3l13 10-13 16L3 13z"
-        stroke="#FFB347"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/* ── Aura arc circle ── */
-function AuraArc({ value, max }: { value: number; max: number }) {
-  const radius = 40;
-  const circ = 2 * Math.PI * radius;
-  const pct = value / max;
-  const offset = circ * (1 - pct);
+// Animated arc for Aura card
+function AuraArc({ active }: { active: boolean }) {
+  const r = 34;
+  const circ = 2 * Math.PI * r;
+  const target = circ * (1 / 30);
+  const [dash, setDash] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let start: number | null = null;
+    const raf = (now: number) => {
+      if (!start) start = now;
+      const p = Math.min((now - start) / 1200, 1);
+      setDash(p * target);
+      if (p < 1) requestAnimationFrame(raf);
+    };
+    requestAnimationFrame(raf);
+  }, [active, target]);
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "16px" }}>
-      <svg width="96" height="96" viewBox="0 0 96 96" aria-label={`${value} of ${max} Aura points`}>
-        <circle
-          cx="48" cy="48" r={radius}
-          fill="none"
-          stroke="rgba(255,183,71,0.1)"
-          strokeWidth="7"
-        />
-        <circle
-          cx="48" cy="48" r={radius}
-          fill="none"
-          stroke="#FFB347"
-          strokeWidth="7"
-          strokeDasharray={circ}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-          transform="rotate(-90 48 48)"
-        />
-        <text x="48" y="44" textAnchor="middle" fill="#FFB347" fontSize="11" fontFamily="Inter" dominantBaseline="middle">AURA</text>
-        <text x="48" y="58" textAnchor="middle" fill="#FFB347" fontSize="13" fontFamily="Space Grotesk" fontWeight="700" dominantBaseline="middle">
-          {value}/{max}
-        </text>
+    <div style={{ position: "relative", width: 80, height: 80, margin: "16px auto 0" }}>
+      <svg width="80" height="80" viewBox="0 0 80 80" style={{ transform: "rotate(-90deg)" }}>
+        <circle cx="40" cy="40" r={r} stroke="rgba(255,183,71,0.12)" strokeWidth="5" fill="none" />
+        <circle cx="40" cy="40" r={r} stroke="#FFB347" strokeWidth="5" fill="none"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
       </svg>
-      <div>
-        <div style={{ color: "#FFB347", fontSize: "12px", fontFamily: "'Inter', sans-serif" }}>
-          pts to unlock
-        </div>
-        <div style={{ color: "#FFB347", fontSize: "22px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700 }}>
-          unsecured
-        </div>
-        <div style={{ color: "#6B7280", fontSize: "12px", fontFamily: "'Inter', sans-serif" }}>
-          borrowing
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "Inter,sans-serif", fontSize: 13, fontWeight: 700, color: "#FFB347" }}>
+        1/30
+      </div>
+    </div>
+  );
+}
+
+// Pool utilization bar
+function PoolBar({ active }: { active: boolean }) {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let start: number | null = null;
+    const raf = (now: number) => {
+      if (!start) start = now;
+      const p = Math.min((now - start) / 1200, 1);
+      setW(p * 67);
+      if (p < 1) requestAnimationFrame(raf);
+    };
+    requestAnimationFrame(raf);
+  }, [active]);
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Pool Utilization</span>
+        <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "#F0F0F0" }}>67%</span>
+      </div>
+      <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 9999, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${w}%`, background: "linear-gradient(90deg,#00FFD1,#7B2FFF)", borderRadius: 9999, transition: "width 0.05s linear", position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent)", animation: "shimmer-sweep 2s linear infinite" }} />
         </div>
       </div>
     </div>
   );
 }
 
-/* ── Mini sparkline ── */
-function Sparkline() {
+// Sparkline SVG with draw animation
+function Sparkline({ active }: { active: boolean }) {
   const pathRef = useRef<SVGPathElement>(null);
-
+  const [drawn, setDrawn] = useState(false);
   useEffect(() => {
+    if (!active || drawn) return;
     const path = pathRef.current;
     if (!path) return;
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = `${len}`;
+    path.style.strokeDashoffset = `${len}`;
+    path.style.transition = "stroke-dashoffset 1.5s ease-out";
+    requestAnimationFrame(() => { path.style.strokeDashoffset = "0"; });
+    setDrawn(true);
+  }, [active, drawn]);
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          path.style.animation = "sparkline-draw 1.4s ease forwards";
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.3 }
-    );
-    observer.observe(path);
-    return () => observer.disconnect();
-  }, []);
-
+  const d = "M0,50 C20,40 30,60 50,45 C70,30 80,55 100,38 C120,20 130,48 150,32 C170,16 180,42 200,28";
   return (
-    <svg
-      viewBox="0 0 400 80"
-      preserveAspectRatio="none"
-      style={{ width: "100%", height: "80px", marginTop: "16px" }}
-      aria-hidden="true"
-    >
+    <svg width="200" height="80" viewBox="0 0 200 80" style={{ overflow: "visible" }}>
       <defs>
         <linearGradient id="spark-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#00FFD1" stopOpacity="0.15" />
-          <stop offset="100%" stopColor="#00FFD1" stopOpacity="0" />
+          <stop offset="0%" stopColor="rgba(0,255,209,0.15)" />
+          <stop offset="100%" stopColor="rgba(0,255,209,0)" />
         </linearGradient>
       </defs>
-      {/* Fill area */}
-      <path
-        d="M0,60 C40,50 60,30 100,35 C140,40 160,20 200,25 C240,30 260,15 300,20 C340,25 370,10 400,15 L400,80 L0,80 Z"
-        fill="url(#spark-fill)"
-      />
-      {/* Line */}
-      <path
-        ref={pathRef}
-        d="M0,60 C40,50 60,30 100,35 C140,40 160,20 200,25 C240,30 260,15 300,20 C340,25 370,10 400,15"
-        fill="none"
-        stroke="#00FFD1"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        style={{
-          strokeDasharray: 600,
-          strokeDashoffset: 600,
-        }}
-      />
+      <path d={`${d} L200,80 L0,80 Z`} fill="url(#spark-fill)" />
+      <path ref={pathRef} d={d} stroke="#00FFD1" strokeWidth="2" fill="none" strokeLinecap="round" />
     </svg>
-  );
-}
-
-/* ── Progress bar ── */
-function ProgressBar({ pct, label }: { pct: number; label: string }) {
-  return (
-    <div style={{ marginTop: "auto", paddingTop: "24px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: "12px", color: "#6B7280" }}>
-          {label}
-        </span>
-        <span style={{ fontFamily: "'Inter', sans-serif", fontSize: "12px", color: "#00FFD1" }}>
-          {pct}%
-        </span>
-      </div>
-      <div
-        style={{
-          height: "4px",
-          background: "rgba(255,255,255,0.08)",
-          borderRadius: "9999px",
-          overflow: "hidden",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            height: "100%",
-            width: `${pct}%`,
-            background: "#00FFD1",
-            borderRadius: "9999px",
-            position: "relative",
-            overflow: "hidden",
-          }}
-        >
-          {/* shimmer */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)",
-              animation: "shimmer 2s linear infinite",
-            }}
-            aria-hidden="true"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Section title helper ── */
-function SectionHead({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div style={{ marginBottom: "40px" }} className="reveal">
-      <p
-        style={{
-          fontFamily: "'Inter', sans-serif",
-          fontSize: "11px",
-          color: "#00FFD1",
-          letterSpacing: "0.15em",
-          textTransform: "uppercase",
-          marginBottom: "16px",
-        }}
-      >
-        {eyebrow}
-      </p>
-      <h2
-        style={{
-          fontFamily: "'Space Grotesk', sans-serif",
-          fontSize: "clamp(36px, 5vw, 64px)",
-          fontWeight: 700,
-          color: "#F0F0F0",
-          letterSpacing: "-0.03em",
-          lineHeight: 1.05,
-        }}
-      >
-        {title}
-      </h2>
-    </div>
   );
 }
 
 export default function BentoGrid() {
-  const sectionRef = useRef<HTMLElement>(null);
+  const { ref: sectionRef, visible } = useReveal(0.1);
 
-  // Scroll reveal observer
-  useEffect(() => {
-    const els = sectionRef.current?.querySelectorAll(".reveal");
-    if (!els) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry, i) => {
-          if (entry.isIntersecting) {
-            setTimeout(() => {
-              (entry.target as HTMLElement).classList.add("visible");
-            }, i * 100);
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
-
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+  const cardReveal = (delay: number): React.CSSProperties => ({
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0)" : "translateY(28px)",
+    transition: `opacity 0.65s cubic-bezier(0.16,1,0.3,1) ${delay}s, transform 0.65s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+  });
 
   return (
     <section
       id="pool"
       ref={sectionRef}
-      style={{ padding: "120px 5vw" }}
+      style={{ position: "relative", zIndex: 1, padding: "120px 6vw", background: SECTION_BG }}
     >
-      <SectionHead
-        eyebrow="What AlgoCrefi Does"
-        title="A complete on-chain credit layer."
-      />
+      {/* Section label */}
+      <div style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500, marginBottom: 12 }}>
+        WHAT ALGOCREFI DOES
+      </div>
+      <h2 className="font-display reveal" style={{ fontSize: "clamp(38px,5.5vw,70px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.035em", lineHeight: 1.05, maxWidth: 700, marginBottom: 40 }}>
+        A complete on-chain credit layer.
+      </h2>
 
-      {/* Bento grid */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.6fr 1fr 1fr",
-          gridTemplateRows: "auto auto",
-          gap: "16px",
-        }}
-        className="bento-outer"
-      >
-        {/* Card 1 — Liquidity Pool (spans 2 rows) */}
-        <BentoCard
-          style={{
-            gridRow: "1 / 3",
-            gridColumn: "1 / 2",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          <HexIcon />
-          <h3
-            style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "22px",
-              fontWeight: 600,
-              color: "#F0F0F0",
-              marginTop: "20px",
-            }}
-          >
-            Deposit &amp; Earn
-          </h3>
-          <p
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "14px",
-              color: "#6B7280",
-              lineHeight: 1.6,
-              marginTop: "12px",
-            }}
-          >
-            Contribute ALGO to the shared pool. Receive proportional pool shares. Withdraw
-            anytime. Your yield compounds with every new borrower.
-          </p>
+      {/* Asymmetric bento grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.7fr 1fr 1fr", gridTemplateRows: "280px 220px", gap: 14 }}>
 
-          {/* Extra info */}
-          <div
-            style={{
-              marginTop: "24px",
-              padding: "16px",
-              background: "rgba(0,255,209,0.04)",
-              border: "1px solid rgba(0,255,209,0.1)",
-              borderRadius: "12px",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-              <span style={{ color: "#6B7280", fontSize: "12px", fontFamily: "'Inter', sans-serif" }}>Pool Balance</span>
-              <span style={{ color: "#F0F0F0", fontSize: "12px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>54,030 ALGO</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ color: "#6B7280", fontSize: "12px", fontFamily: "'Inter', sans-serif" }}>Share Price</span>
-              <span style={{ color: "#00FFD1", fontSize: "12px", fontFamily: "'Space Grotesk', sans-serif", fontWeight: 600 }}>1.0031 ALGO</span>
-            </div>
-          </div>
-
-          <ProgressBar pct={67} label="Pool Utilization" />
-        </BentoCard>
-
-        {/* Card 2 — Collateral Loans */}
-        <BentoCard id="lend" style={{ transitionDelay: "0.1s" }}>
-          <ShieldIcon />
-          <h3
-            style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "20px",
-              fontWeight: 600,
-              color: "#F0F0F0",
-              marginTop: "16px",
-            }}
-          >
-            Borrow with USDC collateral
-          </h3>
-          <p
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "14px",
-              color: "#6B7280",
-              lineHeight: 1.6,
-              marginTop: "10px",
-            }}
-          >
-            Lock USDC collateral, receive ALGO loans instantly. Smart contract enforced
-            repayment terms.
-          </p>
-          <div
-            style={{
-              display: "inline-flex",
-              marginTop: "20px",
-              padding: "6px 14px",
-              background: "rgba(123,47,255,0.1)",
-              border: "1px solid rgba(123,47,255,0.2)",
-              borderRadius: "9999px",
-              fontSize: "12px",
-              color: "#7B2FFF",
-              fontFamily: "'Inter', sans-serif",
-              fontWeight: 500,
-            }}
-          >
-            USDC Collateral · 150% LTV
-          </div>
-        </BentoCard>
-
-        {/* Card 3 — Aura Credit */}
-        <BentoCard id="aura" style={{ transitionDelay: "0.2s" }}>
-          <DiamondIcon />
-          <h3
-            style={{
-              fontFamily: "'Space Grotesk', sans-serif",
-              fontSize: "20px",
-              fontWeight: 600,
-              color: "#F0F0F0",
-              marginTop: "16px",
-            }}
-          >
-            Aura Score Lending
-          </h3>
-          <p
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "14px",
-              color: "#6B7280",
-              lineHeight: 1.6,
-              marginTop: "10px",
-            }}
-          >
-            Build on-chain credit. Reach 30 Aura points to unlock unsecured ALGO loans — no
-            collateral needed.
-          </p>
-          <AuraArc value={1} max={30} />
-        </BentoCard>
-
-        {/* Card 4 — Analytics (spans col 2–3) */}
-        <BentoCard
-          id="analytics"
-          style={{
-            gridColumn: "2 / 4",
-            transitionDelay: "0.3s",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
-            <h3
-              style={{
-                fontFamily: "'Space Grotesk', sans-serif",
-                fontSize: "20px",
-                fontWeight: 600,
-                color: "#F0F0F0",
-              }}
-            >
-              Live Pool Analytics
-            </h3>
-            {/* Inline mini-stats */}
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {[
-                { label: "Pool Balance", val: "54,030 ALGO" },
-                { label: "Share Price",  val: "1.0031 ALGO" },
-                { label: "Total Shares", val: "53,863" },
-              ].map((s) => (
-                <div
-                  key={s.label}
-                  style={{
-                    padding: "6px 12px",
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    fontFamily: "'Inter', sans-serif",
-                    display: "flex",
-                    gap: "6px",
-                  }}
-                >
-                  <span style={{ color: "#6B7280" }}>{s.label}</span>
-                  <span style={{ color: "#F0F0F0", fontWeight: 500 }}>{s.val}</span>
+        {/* Card A — Deposit & Earn (spans both rows) */}
+        <div style={{ gridRow: "1 / 3", ...cardReveal(0) }}>
+          <CardHover style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* Hex icon */}
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <polygon points="14,2 24,8 24,20 14,26 4,20 4,8" stroke="#00FFD1" strokeWidth="1.5" fill="none" />
+            </svg>
+            <div className="font-display" style={{ fontSize: 20, fontWeight: 700, color: "#F0F0F0", marginTop: 16, marginBottom: 8 }}>Deposit & Earn</div>
+            <p style={{ fontFamily: "Inter,sans-serif", fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
+              Contribute ALGO to the shared pool. Receive proportional pool shares. Withdraw anytime.
+            </p>
+            <div style={{ marginTop: "auto", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 20 }}>
+              {[["Pool Balance", "54,030 ALGO"], ["Share Price", "1.0031 ALGO"]].map(([label, value], i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: i === 0 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+                  <span style={{ fontFamily: "Inter,sans-serif", fontSize: 13, color: "rgba(255,255,255,0.4)" }}>{label}</span>
+                  <span style={{ fontFamily: "Inter,sans-serif", fontSize: 13, color: "#F0F0F0" }}>{value}</span>
                 </div>
               ))}
+              <PoolBar active={visible} />
             </div>
-          </div>
-          <Sparkline />
-        </BentoCard>
+          </CardHover>
+        </div>
+
+        {/* Card B — Collateral Loans */}
+        <div style={cardReveal(0.1)}>
+          <CardHover style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <path d="M14 2L4 7v7c0 6.5 4.4 12.6 10 14 5.6-1.4 10-7.5 10-14V7L14 2z" stroke="#7B2FFF" strokeWidth="1.5" fill="none" />
+            </svg>
+            <div className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#F0F0F0", marginTop: 14, marginBottom: 8 }}>Borrow Against Collateral</div>
+            <p style={{ fontFamily: "Inter,sans-serif", fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
+              Lock USDC collateral, receive ALGO instantly. Smart contract enforced terms. No intermediaries.
+            </p>
+            <div style={{ marginTop: "auto" }}>
+              <span style={{ display: "inline-block", background: "rgba(123,47,255,0.12)", border: "1px solid rgba(123,47,255,0.3)", borderRadius: 9999, padding: "5px 14px", fontFamily: "Inter,sans-serif", fontSize: 12, color: "#7B2FFF" }}>
+                USDC Collateral · 150% LTV
+              </span>
+            </div>
+          </CardHover>
+        </div>
+
+        {/* Card C — Aura Credit */}
+        <div style={cardReveal(0.15)}>
+          <CardHover style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <svg width="28" height="28" viewBox="0 0 28 28">
+              <polygon points="14,2 16.9,10.3 25.5,10.3 18.8,15.6 21.3,23.9 14,19 6.7,23.9 9.2,15.6 2.5,10.3 11.1,10.3" stroke="#FFB347" strokeWidth="1.5" fill="none" />
+            </svg>
+            <div className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#F0F0F0", marginTop: 14, marginBottom: 8 }}>Aura Credit Score</div>
+            <p style={{ fontFamily: "Inter,sans-serif", fontSize: 14, color: "rgba(255,255,255,0.45)", lineHeight: 1.6 }}>
+              Build on-chain credit history. Reach 30 pts to borrow without any collateral.
+            </p>
+            <AuraArc active={visible} />
+          </CardHover>
+        </div>
+
+        {/* Card D — Live Analytics (spans 2 columns) */}
+        <div style={{ gridColumn: "2 / 4", ...cardReveal(0.2) }}>
+          <CardHover style={{ height: "100%", display: "flex", gap: 32 }}>
+            {/* Left */}
+            <div style={{ flex: "0 0 45%" }}>
+              <div className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#F0F0F0", marginBottom: 16 }}>Live Pool Analytics</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {["Pool Balance · 54,030 ALGO", "Share Price · 1.0031 ALGO", "Total Shares · 53,863"].map((c) => (
+                  <span key={c} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "6px 12px", fontFamily: "Inter,sans-serif", fontSize: 12, color: "#F0F0F0" }}>{c}</span>
+                ))}
+              </div>
+            </div>
+            {/* Right — sparkline */}
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+              <Sparkline active={visible} />
+            </div>
+          </CardHover>
+        </div>
       </div>
 
+      {/* Mobile override */}
       <style>{`
         @media (max-width: 768px) {
-          .bento-outer {
+          #pool > div:last-child {
             grid-template-columns: 1fr !important;
             grid-template-rows: auto !important;
           }
-          .bento-outer > * {
+          #pool > div:last-child > div:first-child {
             grid-row: auto !important;
+          }
+          #pool > div:last-child > div:last-child {
             grid-column: auto !important;
           }
         }
