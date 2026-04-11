@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
 import ParticleCanvas from "@/components/ParticleCanvas";
 import Loader from "@/components/Loader";
 import Cursor from "@/components/Cursor";
@@ -13,6 +14,7 @@ import Footer from "@/components/Footer";
 
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
+  useScrollReveal();
 
   return (
     <>

@@ -1,11 +1,33 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
 
 const NAV_LINKS = ["Pool", "Lending", "Aura", "Documentation", "GitHub"];
 
 export default function Footer() {
+  const ref = useRef<HTMLElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold: 0.1 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const col = (delay: number): React.CSSProperties => ({
+    opacity: visible ? 1 : 0,
+    transform: visible ? "translateY(0)" : "translateY(20px)",
+    transition: `opacity 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}s, transform 0.7s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+  });
+
   return (
     <>
       <footer
+        ref={ref}
         style={{
           position: "relative",
           zIndex: 1,
@@ -27,7 +49,7 @@ export default function Footer() {
           }}
         >
           {/* Col 1 — Logo + tagline */}
-          <div>
+          <div style={col(0)}>
             <div className="font-display" style={{ fontSize: 20, fontWeight: 700, letterSpacing: "-0.02em", marginBottom: 12 }}>
               <span style={{ color: "#F0F0F0" }}>Algo</span>
               <span style={{ color: "#00FFD1" }}>Crefi</span>
@@ -41,7 +63,7 @@ export default function Footer() {
           </div>
 
           {/* Col 2 — Navigation */}
-          <div>
+          <div style={col(0.1)}>
             <div style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "rgba(255,255,255,0.25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 20 }}>
               Navigate
             </div>
@@ -61,7 +83,7 @@ export default function Footer() {
           </div>
 
           {/* Col 3 — Connect */}
-          <div>
+          <div style={col(0.2)}>
             <div style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "rgba(255,255,255,0.25)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: 20 }}>
               Connect
             </div>
@@ -98,7 +120,7 @@ export default function Footer() {
         </div>
 
         {/* Bottom bar */}
-        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+        <div style={{ ...col(0.3), borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 24, display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "rgba(255,255,255,0.25)" }}>
             © 2026 AlgoCrefi · MIT License
           </span>

@@ -154,10 +154,10 @@ export default function BentoGrid() {
       style={{ position: "relative", zIndex: 1, padding: "120px 6vw", background: SECTION_BG }}
     >
       {/* Section label */}
-      <div style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500, marginBottom: 12 }}>
+      <div className="reveal" style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500, marginBottom: 12 }}>
         WHAT ALGOCREFI DOES
       </div>
-      <h2 className="font-display reveal" style={{ fontSize: "clamp(38px,5.5vw,70px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.035em", lineHeight: 1.05, maxWidth: 700, marginBottom: 40 }}>
+      <h2 className="font-display reveal" style={{ transitionDelay: "0.1s", fontSize: "clamp(38px,5.5vw,70px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.035em", lineHeight: 1.05, maxWidth: 700, marginBottom: 40 }}>
         A complete on-chain credit layer.
       </h2>
 

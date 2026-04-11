@@ -37,12 +37,12 @@ export default function HowItWorks() {
       ref={sectionRef}
       style={{ position: "relative", zIndex: 1, padding: "120px 6vw", background: "rgba(5,5,10,0.92)" }}
     >
-      <div style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500, marginBottom: 12 }}>
+      <div className="reveal" style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", letterSpacing: "0.18em", textTransform: "uppercase", fontWeight: 500, marginBottom: 12 }}>
         HOW IT WORKS
       </div>
       <h2
         className="font-display reveal"
-        style={{ fontSize: "clamp(38px,5.5vw,70px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.035em", lineHeight: 1.05, marginBottom: 48 }}
+        style={{ transitionDelay: "0.1s", fontSize: "clamp(38px,5.5vw,70px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.035em", lineHeight: 1.05, marginBottom: 48 }}
       >
         Three steps.
       </h2>

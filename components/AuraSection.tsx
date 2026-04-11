@@ -41,11 +41,11 @@ export default function AuraSection() {
           </div>
           <h2
             className="font-display"
-            style={{ ...fadeIn(0.1), fontSize: "clamp(32px,4vw,44px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}
+            style={{ ...fadeIn(0.12), fontSize: "clamp(32px,4vw,44px)", fontWeight: 800, color: "#F0F0F0", letterSpacing: "-0.03em", lineHeight: 1.1, marginBottom: 20 }}
           >
             Your on-chain credit score. Trustless.
           </h2>
-          <p style={{ ...fadeIn(0.2), fontFamily: "Inter,sans-serif", fontSize: 16, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
+          <p style={{ ...fadeIn(0.22), fontFamily: "Inter,sans-serif", fontSize: 16, color: "rgba(255,255,255,0.45)", lineHeight: 1.7, marginBottom: 28, maxWidth: 480 }}>
             Every loan you repay earns Aura points. Accumulate 30 Aura points to unlock unsecured borrowing — no collateral, no bank, just your on-chain history.
           </p>
 
