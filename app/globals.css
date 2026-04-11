@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap");
+
+/* ─── Design Tokens ──────────────────────────────────────────── */
+:root {
+  --bg:          #05050A;
+  --teal:        #00FFD1;
+  --violet:      #7B2FFF;
+  --amber:       #FFB347;
+  --surface:     rgba(255, 255, 255, 0.04);
+  --border:      rgba(255, 255, 255, 0.08);
+  --text-primary:#F0F0F0;
+  --text-muted:  #6B7280;
+  --radius-pill: 9999px;
+
+  /* Tailwind theme tokens */
+  --color-background:   var(--bg);
+  --color-foreground:   var(--text-primary);
+  --color-muted:        var(--text-muted);
+  --color-teal:         var(--teal);
+  --color-violet:       var(--violet);
+  --color-amber:        var(--amber);
+  --color-surface:      var(--surface);
+  --color-border-subtle:var(--border);
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-heading: "Space Grotesk", system-ui, sans-serif;
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  cursor: none;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* ─── Noise Texture Overlay ──────────────────────────────────── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+/* ─── Custom Cursor ─────────────────────────────────────────── */
+#custom-cursor {
+  position: fixed;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--teal);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 99999;
+  transform: translate(-50%, -50%);
+  transition: width 0.15s ease, height 0.15s ease, border-color 0.15s ease;
+  will-change: transform;
+}
+
+#custom-cursor.expanded {
+  width: 32px;
+  height: 32px;
+  border-color: var(--violet);
+}
+
+/* ─── Typography Utilities ───────────────────────────────────── */
+.font-heading {
+  font-family: var(--font-heading);
+  font-feature-settings: "ss01", "cv01";
+}
+
+.font-body {
+  font-family: var(--font-sans);
+}
+
+/* ─── Keyframes ──────────────────────────────────────────────── */
+
+/* Orb ambient drift */
+@keyframes orb-drift-teal {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(30px, 30px); }
+}
+
+@keyframes orb-drift-violet {
+  0%   { transform: translate(0, 0); }
+  100% { transform: translate(-30px, -30px); }
+}
+
+/* Loader stroke draw */
+@keyframes stroke-draw {
+  from { stroke-dashoffset: 300; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Loader fade out */
+@keyframes loader-fadeout {
+  0%   { opacity: 1; }
+  100% { opacity: 0; pointer-events: none; }
+}
+
+/* Badge fade in */
+@keyframes badge-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Headline clip reveal */
+@keyframes clip-reveal {
+  from { clip-path: inset(0 0 100% 0); }
+  to   { clip-path: inset(0 0 0% 0); }
+}
+
+/* Subheadline fade up */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Scroll indicator bounce */
+@keyframes bounce-down {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(8px); }
+}
+
+/* Progress shimmer */
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(200%); }
+}
+
+/* Marquee scroll */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* SVG sparkline draw */
+@keyframes sparkline-draw {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Scroll reveal (used via JS class toggle) */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─── Loader ─────────────────────────────────────────────────── */
+#page-loader {
+  position: fixed;
+  inset: 0;
+  background: #05050A;
+  z-index: 99997;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease;
+}
+
+#page-loader.exit {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#page-content {
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+#page-content.visible {
+  opacity: 1;
+}
