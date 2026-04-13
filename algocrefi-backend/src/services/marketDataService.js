@@ -83,16 +83,38 @@ function buildCandles(prices, totalVolumes, fromTs, toTs, interval) {
   return Array.from(buckets.values()).sort((a, b) => a.time - b.time);
 }
 
+const ohlcCache = new Map();
+const OHLC_CACHE_TTL_MS = 5 * 60 * 1000;
+
 async function getOhlc({ interval, fromTs, toTs }) {
+  const cacheKey = `${interval}_${fromTs}_${toTs}`;
+  const cached = ohlcCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < OHLC_CACHE_TTL_MS) {
+    return cached.candles;
+  }
+
   const rangeSeconds = Math.max(3600, toTs - fromTs);
   const days = clamp(Math.ceil(rangeSeconds / 86400), 1, 90);
   const marketChartUrl = `${COINGECKO_BASE}/coins/algorand/market_chart?vs_currency=usd&days=${days}&interval=hourly`;
   const data = await fetchJson(marketChartUrl);
 
-  return buildCandles(data.prices || [], data.total_volumes || [], fromTs, toTs, interval);
+  const candles = buildCandles(data.prices || [], data.total_volumes || [], fromTs, toTs, interval);
+  ohlcCache.set(cacheKey, { candles, ts: Date.now() });
+  if (ohlcCache.size > 20) {
+    const oldest = [...ohlcCache.entries()].sort((a, b) => a[1].ts - b[1].ts)[0];
+    ohlcCache.delete(oldest[0]);
+  }
+  return candles;
 }
 
+const marketStatsCache = { data: null, ts: 0 };
+const MARKET_STATS_CACHE_TTL_MS = 5 * 60 * 1000;
+
 async function getMarketStats() {
+  const now = Date.now();
+  if (marketStatsCache.data && now - marketStatsCache.ts < MARKET_STATS_CACHE_TTL_MS) {
+    return marketStatsCache.data;
+  }
   const marketsUrl = `${COINGECKO_BASE}/coins/markets?vs_currency=usd&ids=algorand&price_change_percentage=24h`;
   const rows = await fetchJson(marketsUrl);
   const row = Array.isArray(rows) ? rows[0] : null;
@@ -101,7 +123,7 @@ async function getMarketStats() {
     throw new Error("No market stats returned by provider");
   }
 
-  return {
+  const data = {
     price: Number(row.current_price || 0),
     change24h: Number(row.price_change_percentage_24h || 0),
     volume24h: Number(row.total_volume || 0),
@@ -109,6 +131,10 @@ async function getMarketStats() {
     high24h: Number(row.high_24h || 0),
     low24h: Number(row.low_24h || 0),
   };
+
+  marketStatsCache.data = data;
+  marketStatsCache.ts = now;
+  return data;
 }
 
 function formatUnits(raw, decimals) {
