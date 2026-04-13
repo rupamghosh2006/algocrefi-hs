@@ -1,18 +1,38 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const METRICS = [
-  { key: "POOL_UTIL", val: "67%",    color: "#00FFD1" },
-  { key: "APR",       val: "0.31%",  color: "rgba(255,255,255,0.5)" },
-  { key: "TVL",       val: "54K",    color: "rgba(255,255,255,0.5)" },
-  { key: "BORROWS",   val: "36.2K",  color: "rgba(255,183,71,0.8)" },
-  { key: "LENDERS",   val: "142",    color: "rgba(255,255,255,0.4)" },
-];
+type TopMetric = {
+  key: string;
+  val: string;
+  color?: string;
+};
 
-export default function TopBar({ title }: { title: string }) {
+function syncedLabel(lastSyncedAt: number | null) {
+  if (!lastSyncedAt) return "Last synced: --";
+  const sec = Math.floor((Date.now() - lastSyncedAt) / 1000);
+  if (sec < 3) return "Last synced: just now";
+  if (sec < 60) return `Last synced: ${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  return `Last synced: ${min}m ago`;
+}
+
+export default function TopBar({
+  title,
+  routeLabel = "app.overview",
+  refreshing = false,
+  lastSyncedAt = null,
+  metrics = [],
+}: {
+  title: string;
+  routeLabel?: string;
+  refreshing?: boolean;
+  lastSyncedAt?: number | null;
+  metrics?: TopMetric[];
+}) {
   const [time, setTime] = useState("");
   const [block, setBlock] = useState(12847392);
   const [flashBlock, setFlashBlock] = useState(false);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString("en-US", { hour12: false }));
@@ -23,7 +43,8 @@ export default function TopBar({ title }: { title: string }) {
       setFlashBlock(true);
       setTimeout(() => setFlashBlock(false), 400);
     }, 3800);
-    return () => { clearInterval(tTime); clearInterval(tBlock); };
+    const tAgo = setInterval(() => setTick((p) => p + 1), 1000);
+    return () => { clearInterval(tTime); clearInterval(tBlock); clearInterval(tAgo); };
   }, []);
 
   return (
@@ -39,6 +60,21 @@ export default function TopBar({ title }: { title: string }) {
       >
         {/* Left: asymmetric title treatment */}
         <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+          <a
+            href="/"
+            style={{
+              fontFamily: "Inter,sans-serif",
+              fontSize: 12,
+              color: "rgba(0,255,209,0.75)",
+              textDecoration: "none",
+              border: "1px solid rgba(0,255,209,0.25)",
+              borderRadius: 6,
+              padding: "4px 8px",
+              marginRight: 4,
+            }}
+          >
+            ← Home
+          </a>
           <h1
             className="font-display"
             style={{
@@ -62,26 +98,34 @@ export default function TopBar({ title }: { title: string }) {
               paddingBottom: 2,
             }}
           >
-            / app.overview
+            / {routeLabel}
           </span>
         </div>
 
         {/* Right: live ripple */}
         <div style={{ display: "flex", alignItems: "center", gap: 7, paddingBottom: 3 }}>
-          <div style={{ position: "relative", width: 8, height: 8 }}>
-            <span
-              style={{
-                position: "absolute",
-                inset: 0,
-                borderRadius: "50%",
-                background: "#00FFD1",
-                animation: "live-ripple 1.5s ease infinite",
-              }}
-            />
-            <span style={{ position: "absolute", inset: 2, borderRadius: "50%", background: "#00FFD1" }} />
+          <div style={{ position: "relative", width: 10, height: 10 }}>
+            {refreshing ? (
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 10,
+                  height: 10,
+                  borderRadius: "50%",
+                  border: "2px solid rgba(0,255,209,0.25)",
+                  borderTopColor: "#00FFD1",
+                  animation: "spin-topbar 0.7s linear infinite",
+                }}
+              />
+            ) : (
+              <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#00FFD1", boxShadow: "0 0 6px #00FFD1" }} />
+            )}
           </div>
           <span style={{ fontFamily: "monospace", fontSize: 10, color: "#00FFD1", letterSpacing: "0.12em" }}>
-            LIVE
+            {refreshing ? "SYNCING" : "LIVE"}
+          </span>
+          <span key={tick} style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
+            {syncedLabel(lastSyncedAt)}
           </span>
         </div>
       </div>
@@ -141,13 +185,13 @@ export default function TopBar({ title }: { title: string }) {
 
         {/* Metrics — flex fill */}
         <div style={{ display: "flex", flex: 1, alignItems: "stretch" }}>
-          {METRICS.map((m, i) => (
+          {metrics.map((m, i) => (
             <div
               key={m.key}
               style={{
                 flex: 1,
                 padding: "5px 10px",
-                borderRight: i < METRICS.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                borderRight: i < metrics.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -158,7 +202,7 @@ export default function TopBar({ title }: { title: string }) {
               <span style={{ fontFamily: "monospace", fontSize: 7, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em" }}>
                 {m.key}
               </span>
-              <span style={{ fontFamily: "monospace", fontSize: 11, color: m.color, fontWeight: 600, letterSpacing: "0.04em" }}>
+              <span style={{ fontFamily: "monospace", fontSize: 11, color: m.color ?? "rgba(255,255,255,0.6)", fontWeight: 600, letterSpacing: "0.04em" }}>
                 {m.val}
               </span>
             </div>
@@ -188,6 +232,9 @@ export default function TopBar({ title }: { title: string }) {
           0%   { transform:scale(1); opacity:0.6; }
           70%  { transform:scale(2.4); opacity:0; }
           100% { transform:scale(1); opacity:0; }
+        }
+        @keyframes spin-topbar {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

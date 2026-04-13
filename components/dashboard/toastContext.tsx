@@ -8,6 +8,7 @@ export interface Toast {
   type: ToastType;
   title: string;
   message?: string;
+  txId?: string;
 }
 
 interface ToastCtx {

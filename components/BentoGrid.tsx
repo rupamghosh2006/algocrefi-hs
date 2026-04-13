@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { getPoolInfo } from "@/src/utils/poolService";
 
 const SECTION_BG = "rgba(5,5,10,0.92)";
 const CARD: React.CSSProperties = {
@@ -201,6 +202,37 @@ function TxStream() {
 export default function BentoGrid() {
   const { ref: sectionRef, visible } = useReveal(0.1);
 
+  const [poolStats, setPoolStats] = useState<{ balance: number; sharePrice: number; totalShares: number } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchPool = async () => {
+      try {
+        const res = await getPoolInfo();
+        if (mounted && res.pool) setPoolStats(res.pool);
+      } catch {
+        // Keep static fallback values when request fails.
+      }
+    };
+
+    fetchPool();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const poolBalanceLabel = poolStats
+    ? `${(poolStats.balance / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 4 })} ALGO`
+    : "54,030 ALGO";
+  const sharePriceLabel = poolStats
+    ? `${(poolStats.sharePrice / 1_000_000).toFixed(4)} ALGO`
+    : "1.0031 ALGO";
+  const totalSharesLabel = poolStats
+    ? poolStats.totalShares.toLocaleString("en-US")
+    : "53,863";
+
   const cardReveal = (delay: number): React.CSSProperties => ({
     opacity: visible ? 1 : 0,
     transform: visible ? "translateY(0)" : "translateY(28px)",
@@ -266,7 +298,7 @@ export default function BentoGrid() {
             </p>
             {/* Pool stats */}
             <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 16, marginTop: 20 }}>
-              {[["Pool Balance", "54,030 ALGO"], ["Share Price", "1.0031 ALGO"]].map(([label, value], i) => (
+              {[["Pool Balance", poolBalanceLabel], ["Share Price", sharePriceLabel]].map(([label, value], i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i === 0 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
                   <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "rgba(255,255,255,0.35)" }}>{label}</span>
                   <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, fontWeight: 600, color: "#F0F0F0" }}>{value}</span>
@@ -318,7 +350,7 @@ export default function BentoGrid() {
             <div style={{ flex: "0 0 45%" }}>
               <div className="font-display" style={{ fontSize: 18, fontWeight: 700, color: "#F0F0F0", marginBottom: 16 }}>Live Pool Analytics</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {["Pool Balance · 54,030 ALGO", "Share Price · 1.0031 ALGO", "Total Shares · 53,863"].map((c) => (
+                {[`Pool Balance · ${poolBalanceLabel}`, `Share Price · ${sharePriceLabel}`, `Total Shares · ${totalSharesLabel}`].map((c) => (
                   <span key={c} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.09)", borderRadius: 8, padding: "6px 12px", fontFamily: "Inter,sans-serif", fontSize: 12, color: "#F0F0F0" }}>{c}</span>
                 ))}
               </div>

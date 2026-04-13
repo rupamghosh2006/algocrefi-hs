@@ -1,19 +1,30 @@
 "use client";
 import { useRef, useState } from "react";
-import type { PoolInfo } from "@/lib/mockData";
+import type { PoolInfo, UserInfo } from "@/lib/mockData";
 import { useToast } from "./toastContext";
+import { Buffer } from "buffer";
+import { getWalletAddress } from "@/src/utils/authService";
+import { buildDepositTxGroup, buildWithdrawTx } from "@/src/utils/algoTxBuilder";
+import { algoToMicroAlgo, estimateAlgoFromShares, estimateShares, submitDeposit, submitWithdraw } from "@/src/utils/poolService";
+import { getStoredWalletType, signTransactions } from "@/src/utils/walletService";
 
-interface Props { pool: PoolInfo; }
+interface Props {
+  pool: PoolInfo;
+  user: UserInfo;
+  onRefresh: () => Promise<void>;
+}
 
 function RippleButton({
   children,
   onClick,
   loading,
+  loadingLabel,
   style,
 }: {
   children: React.ReactNode;
-  onClick: () => void;
+  onClick: () => void | Promise<void>;
   loading?: boolean;
+  loadingLabel?: string;
   style?: React.CSSProperties;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -85,41 +96,147 @@ function RippleButton({
       {loading ? (
         <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
           <span style={{ width: 14, height: 14, border: "2px solid rgba(5,5,10,0.3)", borderTopColor: "#05050A", borderRadius: "50%", display: "inline-block", animation: "spin-cw 0.7s linear infinite" }} />
-          Signing...
+          {loadingLabel || "Signing..."}
         </span>
       ) : children}
     </button>
   );
 }
 
-export default function PoolOperations({ pool }: Props) {
+export default function PoolOperations({ pool, user, onRefresh }: Props) {
   const [tab, setTab] = useState<"deposit" | "withdraw">("deposit");
   const [amount, setAmount] = useState("");
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState<string>("");
   const [infoOpen, setInfoOpen] = useState(false);
   const { addToast } = useToast();
 
-  const shareEstimate = amount ? (parseFloat(amount) / pool.sharePrice).toFixed(4) : null;
-  const algoEstimate = amount ? (parseFloat(amount) * pool.sharePrice).toFixed(4) : null;
+  const amountNumber = Number(amount);
+  const shareEstimate = !isNaN(amountNumber) && amountNumber > 0
+    ? estimateShares(algoToMicroAlgo(amountNumber), pool)
+    : null;
+  const algoEstimate = !isNaN(amountNumber) && amountNumber > 0
+    ? estimateAlgoFromShares(Math.floor(amountNumber), pool)
+    : null;
 
-  const handleSubmit = () => {
-    if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      addToast({ type: "error", title: "Invalid amount", message: "Enter a valid ALGO amount." });
+  const encodeSignedTx = (signedTx: Uint8Array) => Buffer.from(signedTx).toString("base64");
+
+  const failToast = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "Transaction failed";
+    addToast({ type: "error", title: "Action failed", message });
+  };
+
+  const getWalletSession = () => {
+    const walletAddress = getWalletAddress();
+    const walletType = getStoredWalletType();
+    if (!walletAddress || !walletType) {
+      throw new Error("Connect your wallet first");
+    }
+    return { walletAddress, walletType };
+  };
+
+  const handleDeposit = async () => {
+    const parsed = Number(amount);
+    const amountMicroAlgo = algoToMicroAlgo(parsed);
+
+    if (!amount || isNaN(parsed) || parsed <= 0) {
+      addToast({ type: "error", title: "Invalid amount", message: "Enter a valid amount" });
       return;
     }
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSuccess(true);
-      setAmount("");
+    if (amountMicroAlgo < 1_000_000) {
+      addToast({ type: "error", title: "Invalid amount", message: "Minimum deposit is 1 ALGO" });
+      return;
+    }
+
+    try {
+      const { walletAddress, walletType } = getWalletSession();
+      setLoading(true);
+      setLoadingLabel("Building tx...");
+
+      const [paymentTx, depositTx] = await buildDepositTxGroup(walletAddress, amountMicroAlgo);
+
+      setLoadingLabel("Sign in wallet...");
+      const signed = await signTransactions([paymentTx, depositTx], walletType);
+      const [base64Payment, base64Deposit] = signed.map(encodeSignedTx);
+
+      setLoadingLabel("Submitting...");
+      const res = await submitDeposit([base64Payment, base64Deposit]) as { appTxId?: string; message?: string };
+
       addToast({
         type: "success",
-        title: tab === "deposit" ? "Deposit submitted" : "Withdrawal submitted",
-        message: `Tx: 0x${Math.random().toString(16).slice(2, 14).toUpperCase()}...`,
+        title: "Deposit submitted!",
+        message: res.appTxId ? `Tx: ${res.appTxId}` : "Deposit submitted",
+        txId: res.appTxId,
       });
-      setTimeout(() => setSuccess(false), 6000);
-    }, 2200);
+      setAmount("");
+      await onRefresh();
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Transaction failed";
+      if (message.toLowerCase().includes("already in ledger")) {
+        addToast({ type: "success", title: "Deposit likely confirmed", message });
+        setAmount("");
+        await onRefresh();
+      } else {
+        failToast(error);
+      }
+    } finally {
+      setLoading(false);
+      setLoadingLabel("");
+    }
+  };
+
+  const handleWithdraw = async () => {
+    const shares = parseInt(amount, 10);
+    if (!amount || isNaN(shares) || shares <= 0) {
+      addToast({ type: "error", title: "Invalid amount", message: "Enter valid shares" });
+      return;
+    }
+    if (shares > user.shares) {
+      addToast({ type: "error", title: "Invalid amount", message: "Shares exceed your balance" });
+      return;
+    }
+
+    try {
+      const { walletAddress, walletType } = getWalletSession();
+      setLoading(true);
+      setLoadingLabel("Building tx...");
+
+      const withdrawTx = await buildWithdrawTx(walletAddress, shares);
+
+      setLoadingLabel("Sign in wallet...");
+      const signed = await signTransactions([withdrawTx], walletType);
+      const base64Withdraw = encodeSignedTx(signed[0]);
+
+      setLoadingLabel("Submitting...");
+      const res = await submitWithdraw(shares, base64Withdraw) as { appTxId?: string; message?: string };
+
+      addToast({
+        type: "success",
+        title: "Withdrawal submitted!",
+        message: res.appTxId ? `Tx: ${res.appTxId}` : "Withdrawal submitted",
+        txId: res.appTxId,
+      });
+      setAmount("");
+      await onRefresh();
+    } catch (error: unknown) {
+      failToast(error);
+    } finally {
+      setLoading(false);
+      setLoadingLabel("");
+    }
+  };
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    try {
+      if (tab === "deposit") {
+        await handleDeposit();
+      } else {
+        await handleWithdraw();
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -144,7 +261,7 @@ export default function PoolOperations({ pool }: Props) {
           {(["deposit", "withdraw"] as const).map((t) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setAmount(""); setSuccess(false); }}
+               onClick={() => { setTab(t); setAmount(""); }}
               style={{
                 background: tab === t ? "rgba(0,255,209,0.1)" : "transparent",
                 color: tab === t ? "#00FFD1" : "rgba(255,255,255,0.35)",
@@ -199,7 +316,7 @@ export default function PoolOperations({ pool }: Props) {
             }}
           />
           <button
-            onClick={() => setAmount(tab === "deposit" ? "54030" : "1200")}
+            onClick={() => setAmount(tab === "deposit" ? "10" : String(user.shares))}
             style={{
               position: "absolute",
               right: 14,
@@ -223,8 +340,8 @@ export default function PoolOperations({ pool }: Props) {
         {amount && (
           <div style={{ padding: "10px 0", fontFamily: "Inter,sans-serif", fontSize: 13, color: "rgba(255,255,255,0.35)" }}>
             {tab === "deposit"
-              ? `You'll receive ≈ ${shareEstimate} shares`
-              : `You'll receive ≈ ${algoEstimate} ALGO`}
+              ? `You'll receive ≈ ${shareEstimate ?? 0} shares`
+              : `You'll receive ≈ ${(algoEstimate ?? 0).toFixed(4)} ALGO`}
           </div>
         )}
       </div>
@@ -255,41 +372,9 @@ export default function PoolOperations({ pool }: Props) {
         )}
       </div>
 
-      <RippleButton onClick={handleSubmit} loading={loading}>
+      <RippleButton onClick={handleSubmit} loading={loading} loadingLabel={loadingLabel}>
         {tab === "deposit" ? "Deposit ALGO" : "Withdraw Shares"}
       </RippleButton>
-
-      {/* Success */}
-      {success && (
-        <div
-          style={{
-            marginTop: 14,
-            background: "rgba(0,255,209,0.04)",
-            border: "1px solid rgba(0,255,209,0.15)",
-            borderRadius: 10,
-            padding: "14px 16px",
-            animation: "slide-up-fade 0.4s ease forwards",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-            <span style={{ color: "#00FFD1", fontSize: 14 }}>✓</span>
-            <span style={{ fontFamily: "Inter,sans-serif", fontSize: 13, color: "#00FFD1", fontWeight: 500 }}>
-              Transaction submitted
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontFamily: "monospace", fontSize: 11, color: "rgba(255,255,255,0.35)" }}>
-              Tx: 0xA4F2...8C3E
-            </span>
-            <a
-              href="#"
-              style={{ fontFamily: "Inter,sans-serif", fontSize: 11, color: "#00FFD1", textDecoration: "none" }}
-            >
-              View on Explorer ↗
-            </a>
-          </div>
-        </div>
-      )}
 
       <style>{`
         @keyframes ripple-expand {

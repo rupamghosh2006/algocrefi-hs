@@ -54,6 +54,28 @@ function ToastItem({ toast, onRemove }: { toast: Toast; onRemove: () => void }) 
               {toast.message}
             </div>
           )}
+          {toast.txId && (
+            (() => {
+              const shortTx = `${toast.txId.slice(0, 8)}...${toast.txId.slice(-6)}`;
+              return (
+            <a
+              href={`https://testnet.explorer.perawallet.app/tx/${toast.txId}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display: "inline-block",
+                marginTop: 6,
+                fontFamily: "Inter,sans-serif",
+                fontSize: 12,
+                color: "#00FFD1",
+                textDecoration: "none",
+              }}
+            >
+              View {shortTx} ↗
+            </a>
+              );
+            })()
+          )}
         </div>
         <button
           onClick={onRemove}

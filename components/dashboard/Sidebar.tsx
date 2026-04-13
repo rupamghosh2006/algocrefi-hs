@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
+import { disconnectWallet, getStoredWalletType, truncateAddress } from "@/src/utils/walletService";
+import { getWalletAddress, logout } from "@/src/utils/authService";
 
 const NAV = [
   {
@@ -68,6 +70,26 @@ export default function Sidebar({ active, onNav }: SidebarProps) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [txCount, setTxCount] = useState(2847);
   const [mounted, setMounted] = useState(false);
+  const [walletAddress, setWalletAddress] = useState("ALGO3X...F9KT");
+
+  useEffect(() => {
+    const addr = getWalletAddress();
+    if (addr) {
+      setWalletAddress(truncateAddress(addr));
+    }
+  }, []);
+
+  const handleDisconnect = async () => {
+    try {
+      const walletType = getStoredWalletType();
+      if (walletType) {
+        await disconnectWallet(walletType);
+      }
+    } catch {
+      // continue with logout even if wallet SDK disconnect fails
+    }
+    logout();
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -77,6 +99,7 @@ export default function Sidebar({ active, onNav }: SidebarProps) {
 
   return (
     <aside
+      data-sidebar="root"
       style={{
         position: "fixed",
         top: 0,
@@ -130,7 +153,7 @@ export default function Sidebar({ active, onNav }: SidebarProps) {
             />
           </div>
           <div style={{ fontFamily: "monospace", fontSize: 11, color: "rgba(255,255,255,0.65)", letterSpacing: "0.04em" }}>
-            ALGO3X...F9KT
+            {walletAddress}
           </div>
         </div>
       </div>
@@ -230,6 +253,7 @@ export default function Sidebar({ active, onNav }: SidebarProps) {
         </div>
 
         <button
+          onClick={handleDisconnect}
           style={{
             width: "100%",
             background: "transparent",
@@ -255,11 +279,61 @@ export default function Sidebar({ active, onNav }: SidebarProps) {
             e.currentTarget.style.borderColor = "rgba(255,68,68,0.1)";
           }}
         >
-          DISCONNECT_WALLET
+          DISCONNECT
         </button>
       </div>
 
       <style>{`
+        @media (max-width: 768px) {
+          aside[data-sidebar="root"] {
+            top: auto !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            height: 60px !important;
+            border-right: none !important;
+            border-top: 1px solid rgba(255,255,255,0.06) !important;
+            background: rgba(8,8,18,0.92) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-around !important;
+            padding: 0 8px !important;
+            overflow: visible !important;
+          }
+
+          aside[data-sidebar="root"] > div:not(nav),
+          aside[data-sidebar="root"] > nav + div,
+          aside[data-sidebar="root"] > div + div + div,
+          aside[data-sidebar="root"] > div + div,
+          aside[data-sidebar="root"] > div:first-child {
+            display: none !important;
+          }
+
+          aside[data-sidebar="root"] nav {
+            display: flex !important;
+            flex: 1 !important;
+            justify-content: space-around !important;
+            padding: 0 !important;
+            height: 100% !important;
+            align-items: center !important;
+          }
+
+          aside[data-sidebar="root"] nav button {
+            width: auto !important;
+            margin: 0 !important;
+            border-left: none !important;
+            padding: 8px !important;
+            background: transparent !important;
+          }
+
+          aside[data-sidebar="root"] nav button span,
+          aside[data-sidebar="root"] nav button span:first-child,
+          aside[data-sidebar="root"] nav button span:last-child {
+            display: none !important;
+          }
+        }
+
         @keyframes dot-pulse {
           0%,100% { transform:scale(1); opacity:1; }
           50%     { transform:scale(1.6); opacity:0.3; }

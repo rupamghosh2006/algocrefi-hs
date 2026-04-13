@@ -1,30 +1,50 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { PoolInfo, UserInfo, LoanStatus } from "@/lib/mockData";
+import type { PoolInfo, UserInfo } from "@/lib/mockData";
+import { estimateAlgoFromShares } from "@/src/utils/poolService";
+import { formatDueDate, isLoanOverdue } from "@/src/utils/loanService";
 
 function easeOut(t: number) { return 1 - Math.pow(1 - t, 3); }
 
-function useCounter(target: number, duration = 1500) {
+function useCounter(target: number, duration = 1500, key = 0) {
   const [val, setVal] = useState(0);
-  const started = useRef(false);
+  const rafRef = useRef<number | null>(null);
   useEffect(() => {
-    if (started.current) return;
-    started.current = true;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const startVal = val;
     const t0 = performance.now();
     const step = (now: number) => {
       const p = Math.min((now - t0) / duration, 1);
-      setVal(Math.floor(easeOut(p) * target));
-      if (p < 1) requestAnimationFrame(step);
+      setVal(startVal + (target - startVal) * easeOut(p));
+      if (p < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      }
     };
-    requestAnimationFrame(step);
-  }, [target, duration]);
+    rafRef.current = requestAnimationFrame(step);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [target, duration, key]);
   return val;
 }
 
 interface Props {
   pool: PoolInfo;
   user: UserInfo;
-  loan: LoanStatus;
+  lending: {
+    activeLoan: number;
+    dueTs: number;
+    netAuraPoints: number;
+    unsecuredEligible: boolean;
+    blacklisted: number;
+  };
+  loading?: boolean;
+  errors?: {
+    pool?: string;
+    user?: string;
+    lending?: string;
+  };
 }
 
 function Card({
@@ -100,22 +120,32 @@ function AuraArc({ pts, max = 100 }: { pts: number; max?: number }) {
   );
 }
 
-export default function StatCards({ pool, user, loan }: Props) {
+export default function StatCards({ pool, user, lending, loading = false, errors }: Props) {
   const poolAlgo = pool.balance / 1_000_000;
-  const poolCount = useCounter(Math.floor(poolAlgo), 1500);
-  const sharesCount = useCounter(user.shares, 1500);
-  const auraCount = useCounter(user.auraPoints, 1200);
-  const unsecuredEligible = user.auraPoints >= 30;
+  const overdue = isLoanOverdue(lending.dueTs);
+  const refreshKey = `${pool.balance}-${user.shares}-${lending.netAuraPoints}-${lending.activeLoan}-${lending.dueTs}`;
+  const poolCount = useCounter(poolAlgo, 1000, loading ? 0 : refreshKey.length + pool.balance);
+  const sharesCount = useCounter(user.shares, 1000, loading ? 0 : refreshKey.length + user.shares);
+  const auraCount = useCounter(lending.netAuraPoints, 900, loading ? 0 : refreshKey.length + lending.netAuraPoints);
+  const unsecuredEligible = lending.unsecuredEligible;
+  const shareAlgoEstimate = estimateAlgoFromShares(user.shares, {
+    balance: pool.balance,
+    totalShares: pool.totalShares,
+    sharePrice: pool.sharePrice,
+  });
+  const activeLoanAlgo = (lending.activeLoan / 1_000_000).toFixed(4);
+  const dueDate = lending.dueTs > 0 ? formatDueDate(lending.dueTs) : null;
 
   const [barW, setBarW] = useState(0);
   const [auraBarW, setAuraBarW] = useState(0);
   useEffect(() => {
+    if (loading) return;
     const t = setTimeout(() => {
       setBarW(pool.utilizationPct);
-      setAuraBarW(Math.min((user.auraPoints / 30) * 100, 100));
+      setAuraBarW(Math.min((lending.netAuraPoints / 100) * 100, 100));
     }, 600);
     return () => clearTimeout(t);
-  }, [pool.utilizationPct, user.auraPoints]);
+  }, [loading, pool.utilizationPct, lending.netAuraPoints]);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 0.9fr 0.9fr", gap: 14 }}>
@@ -151,8 +181,14 @@ export default function StatCards({ pool, user, loan }: Props) {
           </svg>
         </div>
         <div className="font-display" style={{ fontSize: 28, fontWeight: 700, color: "#F0F0F0", marginTop: 10, letterSpacing: "-0.03em", lineHeight: 1 }}>
-          {poolCount.toLocaleString()}
-          <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>ALGO</span>
+          {loading ? (
+            <span style={{ display: "inline-block", width: 170, height: 30, background: "rgba(255,255,255,0.08)", borderRadius: 6, animation: "shimmer 1.2s linear infinite" }} />
+          ) : (
+            <>
+              {poolCount.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 4 })}
+              <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>ALGO</span>
+            </>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
           <span style={{ color: "#00FFD1", fontSize: 11 }}>↑</span>
@@ -168,6 +204,11 @@ export default function StatCards({ pool, user, loan }: Props) {
             <div style={{ height: "100%", width: `${barW}%`, background: "linear-gradient(90deg,#00FFD1,#7B2FFF)", borderRadius: 9999, transition: "width 1.2s ease" }} />
           </div>
         </div>
+        {errors?.pool && (
+          <div style={{ marginTop: 10, fontFamily: "Inter,sans-serif", fontSize: 11, color: "#FF7777" }}>
+            {errors.pool}
+          </div>
+        )}
       </Card>
 
       {/* Card 2 — Your Shares */}
@@ -183,13 +224,24 @@ export default function StatCards({ pool, user, loan }: Props) {
           </svg>
         </div>
         <div className="font-display" style={{ fontSize: 28, fontWeight: 700, color: "#F0F0F0", marginTop: 10, letterSpacing: "-0.03em", lineHeight: 1 }}>
-          {sharesCount.toLocaleString()}
-          <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>shares</span>
+          {loading ? (
+            <span style={{ display: "inline-block", width: 140, height: 30, background: "rgba(255,255,255,0.08)", borderRadius: 6, animation: "shimmer 1.2s linear infinite" }} />
+          ) : (
+            <>
+              {Math.floor(sharesCount).toLocaleString()}
+              <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>shares</span>
+            </>
+          )}
         </div>
         <div style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "rgba(255,255,255,0.35)", marginTop: 6 }}>
-          ≈ {(user.shares * pool.sharePrice).toFixed(2)} ALGO value
+          {loading ? "Loading..." : `≈ ${shareAlgoEstimate.toFixed(4)} ALGO`}
         </div>
         <MiniSparkline color="#7B2FFF" />
+        {errors?.user && (
+          <div style={{ marginTop: 10, fontFamily: "Inter,sans-serif", fontSize: 11, color: "#FF7777" }}>
+            {errors.user}
+          </div>
+        )}
       </Card>
 
       {/* Card 3 — AURA Score */}
@@ -198,10 +250,10 @@ export default function StatCards({ pool, user, loan }: Props) {
           <span style={{ fontFamily: "monospace", fontSize: 9, color: "#FFB347", letterSpacing: "0.12em", opacity: 0.7 }}>
             AURA_SCORE
           </span>
-          <AuraArc pts={user.auraPoints} />
+          <AuraArc pts={lending.netAuraPoints} />
         </div>
         <div className="font-display" style={{ fontSize: 28, fontWeight: 700, color: "#FFB347", marginTop: 6, letterSpacing: "-0.03em", lineHeight: 1 }}>
-          {auraCount}
+          {loading ? <span style={{ display: "inline-block", width: 80, height: 30, background: "rgba(255,255,255,0.08)", borderRadius: 6, animation: "shimmer 1.2s linear infinite" }} /> : Math.floor(auraCount)}
           <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,183,71,0.5)", marginLeft: 4 }}>pts</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
@@ -212,7 +264,7 @@ export default function StatCards({ pool, user, loan }: Props) {
             </>
           ) : (
             <span style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-              Need {30 - user.auraPoints} more pts
+              Need 30 pts
             </span>
           )}
         </div>
@@ -222,25 +274,29 @@ export default function StatCards({ pool, user, loan }: Props) {
       </Card>
 
       {/* Card 4 — Active Loan */}
-      <Card delay={240} overdue={loan.isOverdue}>
+      <Card delay={240} overdue={overdue}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <span style={{ fontFamily: "monospace", fontSize: 9, color: "rgba(255,255,255,0.3)", letterSpacing: "0.12em" }}>
             ACTIVE_LOAN
           </span>
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none"
             style={{ opacity: 0.25 }}>
-            <circle cx="9" cy="9" r="7" stroke={loan.isOverdue ? "#FF4444" : loan.activeLoan > 0 ? "#FFB347" : "rgba(255,255,255,0.4)"} strokeWidth="1.3" />
-            <path d="M9 5v4.5l2.5 2.5" stroke={loan.isOverdue ? "#FF4444" : loan.activeLoan > 0 ? "#FFB347" : "rgba(255,255,255,0.4)"} strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="9" cy="9" r="7" stroke={overdue ? "#FF4444" : lending.activeLoan > 0 ? "#FFB347" : "rgba(255,255,255,0.4)"} strokeWidth="1.3" />
+            <path d="M9 5v4.5l2.5 2.5" stroke={overdue ? "#FF4444" : lending.activeLoan > 0 ? "#FFB347" : "rgba(255,255,255,0.4)"} strokeWidth="1.3" strokeLinecap="round" />
           </svg>
         </div>
-        {loan.activeLoan > 0 ? (
+        {loading ? (
+          <div style={{ marginTop: 10 }}>
+            <span style={{ display: "inline-block", width: 150, height: 30, background: "rgba(255,255,255,0.08)", borderRadius: 6, animation: "shimmer 1.2s linear infinite" }} />
+          </div>
+        ) : lending.activeLoan > 0 ? (
           <>
             <div className="font-display" style={{ fontSize: 28, fontWeight: 700, color: "#F0F0F0", marginTop: 10, letterSpacing: "-0.03em", lineHeight: 1 }}>
-              {loan.activeLoan}
+              {activeLoanAlgo}
               <span style={{ fontSize: 13, fontWeight: 400, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>ALGO</span>
             </div>
-            <div style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: loan.isOverdue ? "#FF4444" : "#FFB347", marginTop: 6 }}>
-              {loan.isOverdue ? "OVERDUE · " : "Due "}{loan.dueDate}
+            <div style={{ fontFamily: "Inter,sans-serif", fontSize: 12, color: overdue ? "#FF4444" : "#FFB347", marginTop: 6 }}>
+              {overdue ? "OVERDUE · " : "Due "}{dueDate}
             </div>
           </>
         ) : (
@@ -258,7 +314,19 @@ export default function StatCards({ pool, user, loan }: Props) {
             </div>
           </>
         )}
+        {errors?.lending && (
+          <div style={{ marginTop: 10, fontFamily: "Inter,sans-serif", fontSize: 11, color: "#FF7777" }}>
+            {errors.lending}
+          </div>
+        )}
       </Card>
+      <style>{`
+        @keyframes shimmer {
+          0% { opacity: 0.35; }
+          50% { opacity: 0.8; }
+          100% { opacity: 0.35; }
+        }
+      `}</style>
     </div>
   );
 }

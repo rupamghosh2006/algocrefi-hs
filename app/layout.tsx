@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import WalletSessionBootstrap from "@/components/WalletSessionBootstrap";
 
 export const metadata: Metadata = {
   title: "AlgoCrefi — Permissionless Lending on Algorand",
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="loading">{children}</body>
+      <body className="loading">
+        <WalletSessionBootstrap />
+        {children}
+      </body>
     </html>
   );
 }

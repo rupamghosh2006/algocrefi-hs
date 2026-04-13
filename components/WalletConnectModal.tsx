@@ -1,6 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { login, logout, signup } from "@/src/utils/authService";
+import { bindPeraDisconnect as bindPeraDisconnectEvent, connectLute, connectPera, truncateAddress } from "@/src/utils/walletService";
 
 interface WalletConnectModalProps {
   isOpen: boolean;
@@ -13,11 +15,14 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
   const router = useRouter();
   const [step, setStep] = useState<"wallet" | "password">("wallet");
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
+  const [walletAddress, setWalletAddress] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<"login" | "signup" | null>(null);
+  const [walletLoading, setWalletLoading] = useState<Wallet | null>(null);
   const [error, setError] = useState("");
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const peraDisconnectBound = useRef(false);
 
   const walletConfig: Record<Wallet, { label: string; subtitle: string; color: string; accentColor: string; bgColor: string; borderColor: string }> = {
     pera: {
@@ -46,43 +51,86 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
     },
   };
 
-  const handleWalletSelect = (wallet: Wallet) => {
-    if (wallet === "exodus") return; // Disabled for now
-    setSelectedWallet(wallet);
-    setStep("password");
-    setError("");
+  const bindPeraDisconnect = () => {
+    if (peraDisconnectBound.current) return;
+    bindPeraDisconnectEvent(() => logout()).catch(() => {});
+    peraDisconnectBound.current = true;
   };
 
-  const handleAuth = async () => {
-    if (!selectedWallet || !password) {
-      setError("Please enter a password");
+  const handleWalletSelect = async (wallet: Wallet) => {
+    if (wallet === "exodus") return; // Disabled for now
+    setWalletLoading(wallet);
+    setError("");
+
+    try {
+      const accounts = wallet === "pera" ? await connectPera() : await connectLute();
+      const nextWalletAddress = accounts[0];
+      if (!nextWalletAddress) {
+        throw new Error("No wallet account received from wallet provider");
+      }
+
+      if (wallet === "pera") bindPeraDisconnect();
+
+      setSelectedWallet(wallet);
+      setWalletAddress(nextWalletAddress);
+      setStep("password");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Wallet connection failed");
+    } finally {
+      setWalletLoading(null);
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!selectedWallet || !walletAddress.trim() || !password) {
+      setError("Please connect a wallet and enter your password");
       return;
     }
 
     setIsLoading(true);
+    setLoadingAction("login");
     setError("");
 
     try {
-      // Mock auth call (replace with real API later)
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-
-      // Mock JWT and wallet data
-      const mockJWT = `jwt_token_${Date.now()}`;
-      const mockAddress = `ALGO${Math.random().toString(36).substring(2, 8).toUpperCase()}...${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-
-      localStorage.setItem("algocrefi_token", mockJWT);
-      localStorage.setItem("algocrefi_wallet", mockAddress);
+      await login(walletAddress.trim(), password);
       localStorage.setItem("algocrefi_wallet_type", selectedWallet);
 
-      // Close modal with fade animation
       setTimeout(() => {
         onClose();
         router.push("/dashboard");
       }, 400);
-    } catch (err) {
-      setError("Authentication failed. Please try again.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
     } finally {
       setIsLoading(false);
+      setLoadingAction(null);
+    }
+  };
+
+  const handleSignup = async () => {
+    if (!selectedWallet || !walletAddress.trim() || !password) {
+      setError("Please connect a wallet and enter your password");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingAction("signup");
+    setError("");
+
+    try {
+      await signup(walletAddress.trim(), password);
+      await login(walletAddress.trim(), password);
+      localStorage.setItem("algocrefi_wallet_type", selectedWallet);
+
+      setTimeout(() => {
+        onClose();
+        router.push("/dashboard");
+      }, 400);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
+    } finally {
+      setIsLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -196,7 +244,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                   <button
                     key={wallet}
                     onClick={() => handleWalletSelect(wallet)}
-                    disabled={isDisabled}
+                    disabled={isDisabled || walletLoading === wallet}
                     style={{
                       background: "rgba(255,255,255,0.03)",
                       border: `1px solid rgba(255,255,255,0.08)`,
@@ -254,7 +302,9 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                     </div>
 
                     {/* Arrow or Soon badge */}
-                    {isDisabled ? (
+                    {walletLoading === wallet ? (
+                      <span style={{ color: "#00FFD1", fontSize: 12 }}>Connecting...</span>
+                    ) : isDisabled ? (
                       <div
                         style={{
                           background: "rgba(255,183,71,0.1)",
@@ -291,10 +341,35 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
             {/* Login link */}
             <p style={{ fontFamily: "Inter,sans-serif", fontSize: 13, color: "rgba(255,255,255,0.3)", textAlign: "center", margin: 0 }}>
               Already have a session?{" "}
-              <span style={{ color: "#00FFD1", cursor: "pointer", textDecoration: "underline" }} onClick={() => setAuthMode("login")}>
+              <span
+                style={{ color: "#00FFD1", cursor: "pointer", textDecoration: "underline" }}
+                onClick={() => {
+                  if (!walletAddress) {
+                    setError("Connect a wallet first");
+                    return;
+                  }
+                  setStep("password");
+                }}
+              >
                 Login with address
               </span>
             </p>
+            {error && (
+              <div
+                style={{
+                  marginTop: 12,
+                  background: "rgba(255,68,68,0.06)",
+                  border: "1px solid rgba(255,68,68,0.18)",
+                  borderRadius: 10,
+                  padding: "12px 14px",
+                  fontFamily: "Inter,sans-serif",
+                  fontSize: 13,
+                  color: "rgba(255,100,100,0.9)",
+                }}
+              >
+                {error}
+              </div>
+            )}
           </div>
         )}
 
@@ -328,13 +403,12 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                 border: "1px solid rgba(255,255,255,0.09)",
                 borderRadius: 9999,
                 padding: "8px 16px",
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
                 gap: 10,
                 margin: "0 auto 24px",
-                display: "flex" as any,
-                justifyContent: "center" as any,
-                width: "fit-content" as any,
+                justifyContent: "center",
+                width: "fit-content",
               }}
             >
               <div
@@ -347,7 +421,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                 }}
               />
               <span style={{ fontFamily: "monospace", fontSize: 13, color: "rgba(255,255,255,0.6)" }}>
-                {selectedWallet.toUpperCase()}
+                {selectedWallet.toUpperCase()} · {truncateAddress(walletAddress)}
               </span>
             </div>
 
@@ -419,7 +493,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
             {/* Buttons */}
             <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
               <button
-                onClick={() => setAuthMode("login")}
+                onClick={handleLogin}
                 disabled={isLoading}
                 style={{
                   flex: 1,
@@ -464,14 +538,14 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                         animation: "spinner 0.8s linear infinite",
                       }}
                     />
-                    Verifying...
+                    {loadingAction === "login" ? "Verifying..." : "Please wait..."}
                   </>
                 ) : (
                   "Log In"
                 )}
               </button>
               <button
-                onClick={() => setAuthMode("signup")}
+                onClick={handleSignup}
                 disabled={isLoading}
                 style={{
                   flex: 1,
@@ -499,7 +573,23 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
                   }
                 }}
               >
-                Sign Up
+                {isLoading && loadingAction === "signup" ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span
+                      style={{
+                        width: 14,
+                        height: 14,
+                        border: "2px solid rgba(255,255,255,0.2)",
+                        borderTop: "2px solid rgba(255,255,255,0.85)",
+                        borderRadius: "50%",
+                        animation: "spinner 0.8s linear infinite",
+                      }}
+                    />
+                    Creating...
+                  </span>
+                ) : (
+                  "Sign Up"
+                )}
               </button>
             </div>
 

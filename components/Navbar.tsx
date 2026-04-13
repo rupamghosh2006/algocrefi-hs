@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getWalletAddress, isLoggedIn } from "@/src/utils/authService";
+import { truncateAddress } from "@/src/utils/walletService";
 
 const NAV_LINKS = [
   { label: "Pool", href: "#pool" },
@@ -10,9 +13,11 @@ const NAV_LINKS = [
 ];
 
 export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
+  const router = useRouter();
   const [visible, setVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeLink, setActiveLink] = useState("Pool");
+  const [walletChip, setWalletChip] = useState<string | null>(null);
   const lastScrollY = useRef(0);
 
   useEffect(() => {
@@ -24,6 +29,21 @@ export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
 
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const syncSession = () => {
+      if (!isLoggedIn()) {
+        setWalletChip(null);
+        return;
+      }
+      const address = getWalletAddress();
+      setWalletChip(address ? truncateAddress(address) : "Connected");
+    };
+
+    syncSession();
+    window.addEventListener("storage", syncSession);
+    return () => window.removeEventListener("storage", syncSession);
   }, []);
 
   return (
@@ -107,9 +127,32 @@ export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
             ))}
           </nav>
 
+          {walletChip && (
+            <span
+              style={{
+                border: "1px solid rgba(0,255,209,0.25)",
+                background: "rgba(0,255,209,0.08)",
+                color: "#00FFD1",
+                borderRadius: "9999px",
+                padding: "8px 12px",
+                fontFamily: "monospace",
+                fontSize: 11,
+                letterSpacing: "0.04em",
+              }}
+            >
+              {walletChip}
+            </span>
+          )}
+
           {/* Launch App button */}
           <button
-            onClick={onEnterApp}
+            onClick={() => {
+              if (walletChip) {
+                router.push("/dashboard");
+                return;
+              }
+              onEnterApp();
+            }}
             style={{
               border: "1px solid #00FFD1",
               background: "transparent",
@@ -136,7 +179,7 @@ export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
             }}
             aria-label="Launch App"
           >
-            Launch App
+            {walletChip ? "Dashboard" : "Launch App"}
           </button>
 
           {/* Hamburger — mobile only */}
@@ -219,7 +262,14 @@ export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
             </a>
           ))}
           <button
-            onClick={onEnterApp}
+            onClick={() => {
+              if (walletChip) {
+                router.push("/dashboard");
+                setMenuOpen(false);
+                return;
+              }
+              onEnterApp();
+            }}
             style={{
               border: "1px solid #00FFD1",
               background: "transparent",
@@ -232,7 +282,7 @@ export default function Navbar({ onEnterApp }: { onEnterApp: () => void }) {
               marginTop: "4px",
             }}
           >
-            Launch App
+            {walletChip ? "Dashboard" : "Launch App"}
           </button>
         </div>
       )}
