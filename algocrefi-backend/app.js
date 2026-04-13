@@ -5,6 +5,7 @@ const poolRoutes = require("./src/routes/poolRoutes");
 const authRoutes = require("./src/routes/authRoutes");
 const loanRoutes = require("./src/routes/loanRoutes");
 const internalRoutes = require("./src/routes/internalRoutes");
+const marketRoutes = require("./src/routes/marketRoutes");
 
 const app = express();
 
@@ -52,5 +53,6 @@ app.use("/api/pool", poolRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/loan", loanRoutes);
 app.use("/api/internal", internalRoutes);
+app.use("/api/market", marketRoutes);
 
 module.exports = app;
